@@ -33,14 +33,14 @@
 using namespace olp::dataservice::write;
 using namespace olp::dataservice::write::model;
 
-const std::string kEndpoint = "endpoint";
-const std::string kAppid = "appid";
-const std::string kSecret = "secret";
-const std::string kCatalog = "catalog";
-const std::string kLayer = "layer";
-const std::string kLayer2 = "layer2";
-const std::string kLayerSdii = "layer_sdii";
-const std::string kVersionedLayer = "versioned_layer";
+const std::string kEndpoint = "dataservice_write_test_endpoint";
+const std::string kAppid = "dataservice_write_test_appid";
+const std::string kSecret = "dataservice_write_test_secret";
+const std::string kCatalog = "dataservice_write_test_catalog";
+const std::string kLayer = "dataservice_write_test_layer";
+const std::string kLayer2 = "dataservice_write_test_layer2";
+const std::string kLayerSdii = "dataservice_write_test_layer_sdii";
+const std::string kVersionedLayer = "dataservice_write_test_versioned_layer";
 
 class VersionedLayerClientTest : public ::testing::TestWithParam<bool> {};
 

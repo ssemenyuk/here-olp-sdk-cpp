@@ -37,11 +37,11 @@
 using namespace olp::dataservice::write;
 using namespace olp::dataservice::write::model;
 
-const std::string kEndpoint = "endpoint";
-const std::string kAppid = "appid";
-const std::string kSecret = "secret";
-const std::string kCatalog = "catalog";
-const std::string kVolatileLayer = "volatile_layer";
+const std::string kEndpoint = "dataservice_write_test_endpoint";
+const std::string kAppid = "adataservice_write_test_ppid";
+const std::string kSecret = "dataservice_write_test_secret";
+const std::string kCatalog = "dataservice_write_test_catalog";
+const std::string kVolatileLayer = "dataservice_write_test_volatile_layer";
 
 // TODO: Move duplicate test code to common header
 namespace {
