@@ -101,7 +101,7 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
         promise.set_value(response);
       });
 
-  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
 
   ASSERT_TRUE(response.IsSuccessful()) << response.GetError().GetMessage();
