@@ -44,12 +44,9 @@ constexpr auto kWaitTimeout = std::chrono::seconds(10);
 
 }  // namespace
 
-class VersionedLayerClientTest : public ::testing::Test {
+class VersionedLayerClientOnlineTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    prev_level_ = olp::logging::Log::getLevel();
-    olp::logging::Log::setLevel(olp::logging::Level::Trace);
-
     auto network = olp::client::OlpClientSettingsFactory::
         CreateDefaultNetworkRequestHandler();
 
@@ -69,7 +66,6 @@ class VersionedLayerClientTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    olp::logging::Log::setLevel(prev_level_);
     auto network = std::move(settings_->network_request_handler);
     settings_.reset();
     // when test ends we must be sure that network pointer is not captured
@@ -79,10 +75,9 @@ class VersionedLayerClientTest : public ::testing::Test {
 
  protected:
   std::shared_ptr<olp::client::OlpClientSettings> settings_;
-  olp::logging::Level prev_level_;
 };
 
-TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogAsync) {
+TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionsAsync) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
@@ -103,9 +98,8 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogAsync) {
   auto partition =
       CustomParameters::getArgument("dataservice_read_test_partition");
   auto token = catalog_client->GetDataByPartitionId(
-      partition, [&promise](DataResponse response) {
-        promise.set_value(response);
-      });
+      partition,
+      [&promise](DataResponse response) { promise.set_value(response); });
 
   ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -115,7 +109,7 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogAsync) {
   ASSERT_NE(response.GetResult()->size(), 0u);
 }
 
-TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogSync) {
+TEST_F(VersionedLayerClientOnlineTest, GetDataFromTestCatalogSync) {
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
