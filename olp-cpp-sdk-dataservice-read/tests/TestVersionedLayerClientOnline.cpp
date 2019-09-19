@@ -77,7 +77,7 @@ class VersionedLayerClientOnlineTest : public ::testing::Test {
   std::shared_ptr<olp::client::OlpClientSettings> settings_;
 };
 
-TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionsAsync) {
+TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionAsync) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
@@ -109,7 +109,7 @@ TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionsAsync) {
   ASSERT_NE(response.GetResult()->size(), 0u);
 }
 
-TEST_F(VersionedLayerClientOnlineTest, GetDataFromTestCatalogSync) {
+TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionSync) {
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
