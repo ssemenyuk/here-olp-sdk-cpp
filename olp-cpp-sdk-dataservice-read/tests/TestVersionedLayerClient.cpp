@@ -54,8 +54,9 @@ class VersionedLayerClientTest : public ::testing::Test {
     auth_settings.network_request_handler = network;
 
     olp::authentication::TokenProviderDefault provider(
-        CustomParameters::getArgument("appid"),
-        CustomParameters::getArgument("secret"), auth_settings);
+        CustomParameters::getArgument("dataservice_read_test_appid"),
+        CustomParameters::getArgument("dataservice_read_test_secret"),
+        auth_settings);
     olp::client::AuthenticationSettings auth_client_settings;
     auth_client_settings.provider = provider;
 
@@ -79,8 +80,8 @@ class VersionedLayerClientTest : public ::testing::Test {
 };
 
 TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
-  auto catalog =
-      olp::client::HRN::FromString(CustomParameters::getArgument("catalog"));
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("layer");
   auto version = 0;
 
