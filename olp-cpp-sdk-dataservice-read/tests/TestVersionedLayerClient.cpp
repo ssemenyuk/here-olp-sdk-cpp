@@ -28,6 +28,7 @@
 
 #include <olp/core/logging/Log.h>
 #include <olp/core/porting/make_unique.h>
+#include <olp/core/client/OlpClientSettings.h>
 #include <olp/core/client/OlpClientSettingsFactory.h>
 
 #include <olp/dataservice/read/VersionedLayerClient.h>
@@ -78,7 +79,7 @@ class VersionedLayerClientTest : public ::testing::Test {
 };
 
 TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
-  auto catalog = CustomParameters::getArgument("catalog");
+  auto catalog = olp::client::HRN::FromString(CustomParameters::getArgument("catalog"));
   auto layer = CustomParameters::getArgument("layer");
   auto version = 0;
 

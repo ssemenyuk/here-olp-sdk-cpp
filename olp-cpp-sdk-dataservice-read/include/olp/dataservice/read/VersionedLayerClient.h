@@ -26,15 +26,14 @@
 #include <olp/core/client/ApiError.h>
 #include <olp/core/client/ApiResponse.h>
 #include <olp/core/client/CancellationToken.h>
-#include <olp/core/client/OlpClientSettings.h>
+#include <olp/core/client/HRN.h>
 #include <olp/dataservice/read/DataServiceReadApi.h>
 #include <olp/dataservice/read/model/Data.h>
 
 namespace olp {
 namespace client {
-
 class OlpClient;
-
+class OlpClientSettings;
 }  // namespace client
 }  // namespace olp
 
@@ -50,15 +49,16 @@ class DATASERVICE_READ_API VersionedLayerClient final {
  public:
   VersionedLayerClient(
       std::shared_ptr<olp::client::OlpClientSettings> client_settings,
-      std::string hrn, std::string layer_id, std::int64_t layer_version);
+      olp::client::HRN hrn, std::string layer_id,
+      std::int64_t layer_version);
 
   olp::client::CancellationToken GetDataByPartitionId(
-      std::string partition_id, DataResponseCallback callback);
+      const std::string& partition_id, DataResponseCallback callback);
 
  private:
   std::shared_ptr<olp::client::OlpClient> olp_client_;
   std::shared_ptr<olp::client::OlpClientSettings> client_settings_;
-  std::string hrn_;
+  olp::client::HRN hrn_;
   std::string layer_id_;
   std::int64_t layer_version_;
 };
