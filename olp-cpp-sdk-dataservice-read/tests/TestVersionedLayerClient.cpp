@@ -94,11 +94,8 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   auto partition = CustomParameters::getArgument("partition");
   auto token = catalog_client->GetDataByPartitionId(
       partition, [](DataResponse response) {
-        EXPECT_TRUE(response.IsSuccessful());
-        EXPECT_TRUE(response.GetResult() != nullptr);
-        if (response.GetResult()) {
-          EXPECT_NE(response.GetResult()->size(), 0u);
-        }
+        ASSERT_TRUE(response.IsSuccessful());
+        ASSERT_NE(response.GetResult()->size(), 0u);
       });
   std::unique_lock<std::mutex> lock(m);
   ASSERT_TRUE(cv.wait_for(lock, kWaitTimeout) == std::cv_status::no_timeout);
