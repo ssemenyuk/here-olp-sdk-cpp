@@ -47,6 +47,9 @@ constexpr auto kWaitTimeout = std::chrono::seconds(10);
 class VersionedLayerClientTest : public ::testing::Test {
  protected:
   void SetUp() override {
+    prev_level_ = olp::logging::Log::getLevel();
+    olp::logging::Log::setLevel(olp::logging::Level::Trace);
+
     auto network = olp::client::OlpClientSettingsFactory::
         CreateDefaultNetworkRequestHandler();
 
@@ -63,11 +66,10 @@ class VersionedLayerClientTest : public ::testing::Test {
     settings_ = std::make_shared<olp::client::OlpClientSettings>();
     settings_->network_request_handler = network;
     settings_->authentication_settings = auth_client_settings;
-    settings_->task_scheduler =
-        olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
   }
 
   void TearDown() override {
+    olp::logging::Log::setLevel(prev_level_);
     auto network = std::move(settings_->network_request_handler);
     settings_.reset();
     // when test ends we must be sure that network pointer is not captured
@@ -77,9 +79,13 @@ class VersionedLayerClientTest : public ::testing::Test {
 
  protected:
   std::shared_ptr<olp::client::OlpClientSettings> settings_;
+  olp::logging::Level prev_level_;
 };
 
-TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
+TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogAsync) {
+  settings_->task_scheduler =
+      olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
@@ -105,6 +111,28 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   DataResponse response = future.get();
 
   ASSERT_TRUE(response.IsSuccessful()) << response.GetError().GetMessage();
+  ASSERT_TRUE(response.GetResult() != nullptr);
+  ASSERT_NE(response.GetResult()->size(), 0u);
+}
+
+TEST_F(VersionedLayerClientTest, GetDataFromTestCatalogSync) {
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
+  auto version = 0;
+
+  auto catalog_client =
+      std::make_unique<olp::dataservice::read::VersionedLayerClient>(
+          settings_, catalog, layer, version);
+  ASSERT_TRUE(catalog_client);
+
+  DataResponse response;
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
+  auto token = catalog_client->GetDataByPartitionId(
+      partition,
+      [&response](DataResponse resp) { response = std::move(resp); });
+  ASSERT_TRUE(response.IsSuccessful());
   ASSERT_TRUE(response.GetResult() != nullptr);
   ASSERT_NE(response.GetResult()->size(), 0u);
 }
