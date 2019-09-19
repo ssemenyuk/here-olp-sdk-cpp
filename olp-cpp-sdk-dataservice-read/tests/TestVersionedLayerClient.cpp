@@ -26,10 +26,10 @@
 #include <olp/authentication/Settings.h>
 #include <olp/authentication/TokenProvider.h>
 
-#include <olp/core/logging/Log.h>
-#include <olp/core/porting/make_unique.h>
 #include <olp/core/client/OlpClientSettings.h>
 #include <olp/core/client/OlpClientSettingsFactory.h>
+#include <olp/core/logging/Log.h>
+#include <olp/core/porting/make_unique.h>
 
 #include <olp/dataservice/read/VersionedLayerClient.h>
 
@@ -79,7 +79,8 @@ class VersionedLayerClientTest : public ::testing::Test {
 };
 
 TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
-  auto catalog = olp::client::HRN::FromString(CustomParameters::getArgument("catalog"));
+  auto catalog =
+      olp::client::HRN::FromString(CustomParameters::getArgument("catalog"));
   auto layer = CustomParameters::getArgument("layer");
   auto version = 0;
 
@@ -95,7 +96,9 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
       partition, [](DataResponse response) {
         EXPECT_TRUE(response.IsSuccessful());
         EXPECT_TRUE(response.GetResult() != nullptr);
-        EXPECT_NE(response.GetResult()->size(), 0u);
+        if (response.GetResult()) {
+          EXPECT_NE(response.GetResult()->size(), 0u);
+        }
       });
   std::unique_lock<std::mutex> lock(m);
   ASSERT_TRUE(cv.wait_for(lock, kWaitTimeout) == std::cv_status::no_timeout);
