@@ -40,7 +40,7 @@ using namespace testing;
 
 namespace {
 
-constexpr auto kWaitTimeout = std::chrono::seconds(1);
+constexpr auto kWaitTimeout = std::chrono::seconds(10);
 
 }  // namespace
 
@@ -82,7 +82,7 @@ class VersionedLayerClientTest : public ::testing::Test {
 TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
-  auto layer = CustomParameters::getArgument("layer");
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
   auto version = 0;
 
   auto catalog_client =
@@ -90,14 +90,20 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
           settings_, catalog, layer, version);
   ASSERT_TRUE(catalog_client);
 
-  std::mutex m;
-  std::condition_variable cv;
-  auto partition = CustomParameters::getArgument("partition");
+  std::promise<DataResponse> promise;
+  std::future<DataResponse> future = promise.get_future();
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
   auto token = catalog_client->GetDataByPartitionId(
-      partition, [](DataResponse response) {
-        ASSERT_TRUE(response.IsSuccessful());
-        ASSERT_NE(response.GetResult()->size(), 0u);
+      partition, [&promise](DataResponse response) {
+        promise.set_value(response);
+
       });
-  std::unique_lock<std::mutex> lock(m);
-  ASSERT_TRUE(cv.wait_for(lock, kWaitTimeout) == std::cv_status::no_timeout);
+
+  ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  DataResponse response = future.get();
+
+  ASSERT_TRUE(response.IsSuccessful());
+  ASSERT_TRUE(response.GetResult() != nullptr);
+  ASSERT_NE(response.GetResult()->size(), 0u);
 }
