@@ -34,6 +34,8 @@
 #include "ApiClientLookup.h"
 #include "generated/model/Api.h"
 
+#include "repositories/ExecuteOrSchedule.inl"
+
 #include <algorithm>
 
 namespace olp {
@@ -54,120 +56,133 @@ VersionedLayerClient::VersionedLayerClient(
 
 olp::client::CancellationToken VersionedLayerClient::GetDataByPartitionId(
     const std::string& partition_id, DataResponseCallback callback) {
-  olp::client::CancellationContext context;
+  auto context = std::make_shared<olp::client::CancellationContext>();
   olp::client::CancellationToken token(
-      [=]() mutable { context.CancelOperation(); });
-  Condition condition(context);
-  auto wait_and_check = [&] {
-    if (!condition.Wait() && !context.IsCancelled()) {
-      callback({{olp::client::ErrorCode::RequestTimeout,
-                 "Network request timed out.", true}});
-      return false;
+      [context]() mutable { context->CancelOperation(); });
+
+  auto olp_client = olp_client_;
+  auto client_settings = client_settings_;
+  auto hrn = hrn_;
+  auto layer_id = layer_id_;
+  auto layer_version = layer_version_;
+
+  auto task = [context, callback, partition_id, olp_client, client_settings,
+               hrn, layer_id, layer_version]() {
+    Condition condition(*context);
+    auto wait_and_check = [&] {
+      if (!condition.Wait() && !context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::RequestTimeout,
+                   "Network request timed out.", true}});
+        return false;
+      }
+      return true;
+    };
+
+    // Step 1. Get query service
+
+    ApiClientLookup::ApiClientResponse apis_response;
+
+    context->ExecuteOrCancelled([&]() {
+      return ApiClientLookup::LookupApiClient(
+          olp_client, "query", "v1", hrn,
+          [&](ApiClientLookup::ApiClientResponse response) {
+            apis_response = std::move(response);
+            condition.Notify();
+          });
+    });
+
+    // TODO: collapse these 2x4 checks into a lambda calls
+    if (!wait_and_check()) {
+      return;
     }
-    return true;
+    if (!apis_response.IsSuccessful()) {
+      callback({{olp::client::ErrorCode::ServiceUnavailable,
+                 "Query request unsuccessful.", true}});
+      return;
+    }
+
+    auto query_client = apis_response.GetResult();
+
+    // Step 2. Use query service to acquire metadata
+
+    MetadataApi::PartitionsResponse partitions_response;
+    context->ExecuteOrCancelled([&]() {
+      return olp::dataservice::read::MetadataApi::GetPartitions(
+          query_client, layer_id, layer_version, boost::none, boost::none,
+          boost::none, [&](MetadataApi::PartitionsResponse response) {
+            partitions_response = std::move(response);
+            condition.Notify();
+          });
+    });
+
+    if (!wait_and_check()) {
+      return;
+    }
+    if (!partitions_response.IsSuccessful()) {
+      callback({{olp::client::ErrorCode::ServiceUnavailable,
+                 "Metadata request unsuccessful.", true}});
+      return;
+    }
+
+    // Step 3. Get blob service
+
+    context->ExecuteOrCancelled([&]() {
+      return ApiClientLookup::LookupApiClient(
+          olp_client, "blob", "v1", hrn,
+          [&](ApiClientLookup::ApiClientResponse response) {
+            apis_response = std::move(response);
+            condition.Notify();
+          });
+    });
+
+    if (!wait_and_check()) {
+      return;
+    }
+    if (!apis_response.IsSuccessful()) {
+      callback({{olp::client::ErrorCode::ServiceUnavailable,
+                 "Blob request unsuccessful.", true}});
+      return;
+    }
+
+    // Step 4. Use metadata in blob service to acquire data for user
+
+    auto partitions = partitions_response.GetResult();
+    auto partition_it = std::find_if(partitions.GetPartitions().begin(),
+                                     partitions.GetPartitions().end(),
+                                     [&](const model::Partition& p) {
+                                       return p.GetPartition() == partition_id;
+                                     });
+    if (partition_it == partitions.GetPartitions().end()) {
+      callback(DataResponse(model::Data()));
+      return;
+    }
+    auto data_handle = partition_it->GetDataHandle();
+    auto blob_client = apis_response.GetResult();
+    BlobApi::DataResponse data_response;
+    context->ExecuteOrCancelled([&]() {
+      return olp::dataservice::read::BlobApi::GetBlob(
+          blob_client, layer_id, data_handle, boost::none, boost::none,
+          [&](BlobApi::DataResponse response) {
+            data_response = std::move(response);
+            condition.Notify();
+          });
+    });
+
+    if (!wait_and_check()) {
+      return;
+    }
+    if (!data_response.IsSuccessful()) {
+      callback({{olp::client::ErrorCode::ServiceUnavailable,
+                 "Data request unsuccessful.", true}});
+      return;
+    }
+
+    auto data = data_response.GetResult();
+    callback(data);
   };
 
-  // Step 1. Get query service
+  repository::ExecuteOrSchedule(client_settings_.get(), task);
 
-  ApiClientLookup::ApiClientResponse apis_response;
-
-  context.ExecuteOrCancelled([&]() {
-    return ApiClientLookup::LookupApiClient(
-        olp_client_, "query", "v1", hrn_,
-        [&](ApiClientLookup::ApiClientResponse response) {
-          apis_response = std::move(response);
-          condition.Notify();
-        });
-  });
-
-  //TODO: collapse these 2x4 checks into a lambda calls
-  if (!wait_and_check()) {
-    return token;
-  }
-  if (!apis_response.IsSuccessful()) {
-    callback({{olp::client::ErrorCode::ServiceUnavailable,
-               "Query request unsuccessful.", true}});
-    return token;
-  }
-
-  auto query_client = apis_response.GetResult();
-
-  // Step 2. Use query service to acquire metadata
-
-  MetadataApi::PartitionsResponse partitions_response;
-  context.ExecuteOrCancelled([&]() {
-    return olp::dataservice::read::MetadataApi::GetPartitions(
-        query_client, layer_id_, layer_version_, boost::none, boost::none,
-        boost::none, [&](MetadataApi::PartitionsResponse response) {
-          partitions_response = std::move(response);
-          condition.Notify();
-        });
-  });
-
-  if (!wait_and_check()) {
-    return token;
-  }
-  if (!partitions_response.IsSuccessful()) {
-    callback({{olp::client::ErrorCode::ServiceUnavailable,
-               "Metadata request unsuccessful.", true}});
-    return token;
-  }
-
-  // Step 3. Get blob service
-
-  context.ExecuteOrCancelled([&]() {
-    return ApiClientLookup::LookupApiClient(
-        olp_client_, "blob", "v1", hrn_,
-        [&](ApiClientLookup::ApiClientResponse response) {
-          apis_response = std::move(response);
-          condition.Notify();
-        });
-  });
-
-  if (!wait_and_check()) {
-    return token;
-  }
-  if (!apis_response.IsSuccessful()) {
-    callback({{olp::client::ErrorCode::ServiceUnavailable,
-               "Blob request unsuccessful.", true}});
-    return token;
-  }
-
-  // Step 4. Use metadata in blob service to acquire data for user
-
-  auto partitions = partitions_response.GetResult();
-  auto partition_it = std::find_if(partitions.GetPartitions().begin(),
-                                   partitions.GetPartitions().end(),
-                                   [&](const model::Partition& p) {
-                                     return p.GetPartition() == partition_id;
-                                   });
-  if (partition_it == partitions.GetPartitions().end()) {
-    callback(DataResponse(model::Data()));
-    return token;
-  }
-  auto data_handle = partition_it->GetDataHandle();
-  auto blob_client = apis_response.GetResult();
-  BlobApi::DataResponse data_response;
-  context.ExecuteOrCancelled([&]() {
-    return olp::dataservice::read::BlobApi::GetBlob(
-        blob_client, layer_id_, data_handle, boost::none, boost::none,
-        [&](BlobApi::DataResponse response) {
-          data_response = std::move(response);
-          condition.Notify();
-        });
-  });
-
-  if (!wait_and_check()) {
-    return token;
-  }
-  if (!data_response.IsSuccessful()) {
-    callback({{olp::client::ErrorCode::ServiceUnavailable,
-               "Data request unsuccessful.", true}});
-    return token;
-  }
-
-  auto data = data_response.GetResult();
-  callback(data);
   return token;
 }
 
