@@ -83,7 +83,9 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
-  auto version = 0;
+  auto version = std::atoi(
+      CustomParameters::getArgument("dataservice_read_test_layer_version")
+          .c_str());
 
   auto catalog_client =
       std::make_unique<olp::dataservice::read::VersionedLayerClient>(
@@ -97,10 +99,9 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   auto token = catalog_client->GetDataByPartitionId(
       partition, [&promise](DataResponse response) {
         promise.set_value(response);
-
       });
 
-  ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
 
   ASSERT_TRUE(response.IsSuccessful()) << response.GetError().GetMessage();

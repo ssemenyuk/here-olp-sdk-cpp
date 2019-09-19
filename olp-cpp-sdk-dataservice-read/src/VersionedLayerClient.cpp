@@ -27,7 +27,7 @@
 #include <olp/core/context/Context.h>
 
 #include "generated/api/BlobApi.h"
-#include "generated/api/MetadataApi.h"
+#include "generated/api/QueryApi.h"
 
 #include "olp/dataservice/read/Condition.h"
 
@@ -105,11 +105,13 @@ olp::client::CancellationToken VersionedLayerClient::GetDataByPartitionId(
 
     // Step 2. Use query service to acquire metadata
 
-    MetadataApi::PartitionsResponse partitions_response;
+    std::vector<std::string> paritions;
+    paritions.push_back(partition_id);
+    QueryApi::PartitionsResponse partitions_response;
     context->ExecuteOrCancelled([&]() {
-      return olp::dataservice::read::MetadataApi::GetPartitions(
-          query_client, layer_id, layer_version, boost::none, boost::none,
-          boost::none, [&](MetadataApi::PartitionsResponse response) {
+      return olp::dataservice::read::QueryApi::GetPartitionsbyId(
+          query_client, layer_id, paritions, layer_version, boost::none,
+          boost::none, [&](QueryApi::PartitionsResponse response) {
             partitions_response = std::move(response);
             condition.Notify();
           });
