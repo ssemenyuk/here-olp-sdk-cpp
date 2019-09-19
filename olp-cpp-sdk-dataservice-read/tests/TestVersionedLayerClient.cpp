@@ -103,7 +103,7 @@ TEST_F(VersionedLayerClientTest, GetDataFromTestCatalog) {
   ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
 
-  ASSERT_TRUE(response.IsSuccessful());
+  ASSERT_TRUE(response.IsSuccessful()) << response.GetError().GetMessage();
   ASSERT_TRUE(response.GetResult() != nullptr);
   ASSERT_NE(response.GetResult()->size(), 0u);
 }
