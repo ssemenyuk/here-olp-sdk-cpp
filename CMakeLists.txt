@@ -83,6 +83,7 @@ add_subdirectory(docs)
 
 if(EDGE_SDK_ENABLE_TESTING)
     add_subdirectory(tests/functional)
+    add_subdirectory(tests/performance)
 endif()
 
 # Add example
