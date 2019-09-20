@@ -146,17 +146,12 @@ class VersionedLayerClient::Impl final {
 
       // Step 4. Use metadata in blob service to acquire data for user
 
-      auto partitions = partitions_response.GetResult();
-      auto partition_it = std::find_if(
-          partitions.GetPartitions().begin(), partitions.GetPartitions().end(),
-          [&](const model::Partition& p) {
-            return p.GetPartition() == partition_id;
-          });
-      if (partition_it == partitions.GetPartitions().end()) {
+      auto partitions = partitions_response.GetResult().GetPartitions();
+      if (partitions.empty()) {
         callback(DataResponse(model::Data()));
         return;
       }
-      auto data_handle = partition_it->GetDataHandle();
+      auto data_handle = partitions.front().GetDataHandle();
       auto blob_client = apis_response.GetResult();
       BlobApi::DataResponse data_response;
       context->ExecuteOrCancelled([&]() {

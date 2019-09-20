@@ -28,6 +28,7 @@ set(OLP_SDK_DATASERVICE_READ_TEST_SOURCES
     PendingRequestsTest.cpp
     SerializerTest.cpp
     TestVersionedLayerClientOnline.cpp
+    TestVersionedLayerClientOffline.cpp
 )
 
 if (ANDROID OR IOS)
