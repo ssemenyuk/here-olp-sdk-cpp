@@ -90,7 +90,7 @@ TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionAsync) {
 
   auto catalog_client =
       std::make_unique<olp::dataservice::read::VersionedLayerClient>(
-          settings_, catalog, layer, version);
+          *settings_, catalog, layer, version);
   ASSERT_TRUE(catalog_client);
 
   std::promise<DataResponse> promise;
@@ -117,7 +117,7 @@ TEST_F(VersionedLayerClientOnlineTest, GetDataFromPartitionSync) {
 
   auto catalog_client =
       std::make_unique<olp::dataservice::read::VersionedLayerClient>(
-          settings_, catalog, layer, version);
+          *settings_, catalog, layer, version);
   ASSERT_TRUE(catalog_client);
 
   DataResponse response;
