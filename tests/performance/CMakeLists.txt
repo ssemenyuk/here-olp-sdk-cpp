@@ -26,6 +26,7 @@ if (ANDROID OR IOS)
     target_link_libraries(olp-cpp-sdk-performance-tests-lib
         PRIVATE
             gtest
+            olp-cpp-sdk-authentication
             olp-cpp-sdk-dataservice-read
     )
     if (ANDROID)
@@ -48,6 +49,7 @@ else()
     target_link_libraries(olp-cpp-sdk-performance-tests
         PRIVATE
             gtest_main
+            olp-cpp-sdk-authentication
             olp-cpp-sdk-dataservice-read
     )
 endif()
