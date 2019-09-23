@@ -45,11 +45,11 @@ class VersionedLayerClient::Impl final {
  public:
   Impl(client::OlpClientSettings client_settings, client::HRN hrn,
        std::string layer_id, std::int64_t layer_version)
-      : client_settings_(std::move(client_settings)),
+      : olp_client_(olp::client::OlpClientFactory::Create(client_settings)),
+        client_settings_(std::move(client_settings)),
         hrn_(std::move(hrn)),
         layer_id_(std::move(layer_id)),
-        layer_version_(layer_version),
-        olp_client_(olp::client::OlpClientFactory::Create(client_settings)) {}
+        layer_version_(layer_version) {}
 
   ~Impl() = default;
 
@@ -90,6 +90,11 @@ class VersionedLayerClient::Impl final {
       });
 
       // TODO: collapse these 2x4 checks into a lambda calls
+      if (context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::Cancelled,
+                   "Request cancelled.", true}});
+        return;
+      }
       if (!wait_and_check()) {
         return;
       }
@@ -115,6 +120,11 @@ class VersionedLayerClient::Impl final {
             });
       });
 
+      if (context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::Cancelled,
+                   "Request cancelled.", true}});
+        return;
+      }
       if (!wait_and_check()) {
         return;
       }
@@ -135,6 +145,11 @@ class VersionedLayerClient::Impl final {
             });
       });
 
+      if (context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::Cancelled,
+                   "Request cancelled.", true}});
+        return;
+      }
       if (!wait_and_check()) {
         return;
       }
@@ -163,6 +178,11 @@ class VersionedLayerClient::Impl final {
             });
       });
 
+      if (context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::Cancelled,
+                   "Request cancelled.", true}});
+        return;
+      }
       if (!wait_and_check()) {
         return;
       }

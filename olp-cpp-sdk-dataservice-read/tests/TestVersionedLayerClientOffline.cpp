@@ -212,7 +212,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionSync) {
   ASSERT_NE(response.GetResult()->size(), 0u);
 }
 
-TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsyncCancelLookup) {
+TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookup) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
@@ -259,8 +259,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsyncCancelLookup) {
   ASSERT_TRUE(response.GetResult() == nullptr);
 }
 
-TEST_F(VersionedLayerClientOfflineTest,
-       GetDataFromPartitionAsyncCancelPartition) {
+TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
@@ -309,8 +308,7 @@ TEST_F(VersionedLayerClientOfflineTest,
   ASSERT_TRUE(response.GetResult() == nullptr);
 }
 
-TEST_F(VersionedLayerClientOfflineTest,
-       GetDataFromPartitionAsyncCancelLookupBlob) {
+TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
@@ -361,8 +359,7 @@ TEST_F(VersionedLayerClientOfflineTest,
   ASSERT_TRUE(response.GetResult() == nullptr);
 }
 
-TEST_F(VersionedLayerClientOfflineTest,
-       GetDataFromPartitionAsyncCancelBlobData) {
+TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
 
