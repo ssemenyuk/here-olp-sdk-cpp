@@ -28,6 +28,7 @@ if (ANDROID OR IOS)
             gtest
             olp-cpp-sdk-authentication
             olp-cpp-sdk-dataservice-read
+            olp-cpp-sdk-tests-common-lib
     )
     if (ANDROID)
         include(${CMAKE_SOURCE_DIR}/cmake/android/gen_android_test.cmake)
@@ -45,11 +46,15 @@ if (ANDROID OR IOS)
     endif()
 
 else()
+    message("performance tests files:")
+    message(${OLP_SDK_PERFORMANCE_TESTS_SOURCES})
     add_executable(olp-cpp-sdk-performance-tests ${OLP_SDK_PERFORMANCE_TESTS_SOURCES})
+
     target_link_libraries(olp-cpp-sdk-performance-tests
         PRIVATE
             gtest_main
             olp-cpp-sdk-authentication
             olp-cpp-sdk-dataservice-read
+            olp-cpp-sdk-tests-common-lib
     )
 endif()

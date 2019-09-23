@@ -82,6 +82,7 @@ add_sdks()
 add_subdirectory(docs)
 
 if(EDGE_SDK_ENABLE_TESTING)
+    add_subdirectory(tests/common)
     add_subdirectory(tests/functional)
     add_subdirectory(tests/performance)
 endif()
@@ -94,4 +95,3 @@ endif()
 
 # Add uninstall script
 add_custom_target(uninstall "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake")
-

@@ -1,4 +1,3 @@
-#
 # Copyright (C) 2019 HERE Europe B.V.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,29 +14,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # License-Filename: LICENSE
-#
 
-import sys
-import matplotlib.pyplot as plt
+cmake_minimum_required(VERSION 3.5)
 
-assert(len(sys.argv) == 3)
-input_file_name = sys.argv[1]
-output_image_name = sys.argv[2]
+add_library(olp-cpp-sdk-tests-common-lib INTERFACE)
 
-times = list()
-heap_sizes = list()
+target_link_libraries(olp-cpp-sdk-tests-common-lib
+        INTERFACE
+                gmock
+                olp-cpp-sdk-core
+)
 
-for line in open(input_file_name, 'r').readlines():
-    if line.find("time=") != -1:
-        time = int(line.split('=')[1])
-        times.append(time)
-    elif line.find("mem_heap_B=") != -1:
-        heap_size = int(line.split('=')[1])
-        heap_sizes.append(heap_size)
+target_include_directories(olp-cpp-sdk-tests-common-lib
+        INTERFACE
+                .
+)
 
-assert(len(times) == len(heap_sizes))
-
-plt.plot(times, heap_sizes)
-plt.xlabel("Time (ms)")
-plt.ylabel("Heap size (bytes)")
-plt.savefig(output_image_name)
+message("configured tests common lib")

@@ -1,6 +1,24 @@
+/*
+ * Copyright (C) 2019 HERE Europe B.V.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ * License-Filename: LICENSE
+ */
+
 #include <olp/authentication/TokenProvider.h>
 
-#include <olp/core/cache/KeyValueCache.h>
 #include <olp/core/client/HRN.h>
 #include <olp/core/client/OlpClientSettings.h>
 #include <olp/core/client/OlpClientSettingsFactory.h>
@@ -15,6 +33,8 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+
+#include <mocks/KeyValueCache.h>
 
 using namespace olp;
 
@@ -33,35 +53,6 @@ std::ostream& operator<<(std::ostream& stream,
                 << ", .number_of_requests=" << config.number_of_requests
                 << ", .use_no_cache=" << config.use_no_cache << ")";
 }
-
-namespace {
-class AlwaysEmptyCache : public olp::cache::KeyValueCache {
- public:
-  ~AlwaysEmptyCache() = default;
-
-  bool Put(const std::string& key, const boost::any& value,
-           const olp::cache::Encoder& encoder,
-           time_t expiry = (std::numeric_limits<time_t>::max)()) override {
-    return true;
-  }
-  bool Put(const std::string& key,
-           const std::shared_ptr<std::vector<unsigned char>> value,
-           time_t expiry = (std::numeric_limits<time_t>::max)()) override {
-    return true;
-  }
-  boost::any Get(const std::string& key,
-                 const olp::cache::Decoder& encoder) override {
-    return boost::any();
-  }
-  std::shared_ptr<std::vector<unsigned char>> Get(
-      const std::string& key) override {
-    return nullptr;
-  }
-  bool Remove(const std::string& key) override { return true; }
-  bool RemoveKeysWithPrefix(const std::string& prefix) override { return true; }
-};
-
-}  // namespace
 
 class CatalogClientTest
     : public ::testing::TestWithParam<CatalogClientTestConfiguration> {
@@ -94,8 +85,17 @@ class CatalogClientTest
   }
 
   std::shared_ptr<olp::cache::KeyValueCache> CreateCache() {
+    using ::testing::_;
+    using ::testing::Return;
     if (GetParam().use_no_cache) {
-      return std::make_shared<AlwaysEmptyCache>();
+      auto cache = std::make_shared<olp::testing::mocks::KeyValueCache>();
+      ON_CALL(*cache, Put(_, _, _, _)).WillByDefault(Return(true));
+      ON_CALL(*cache, Put(_, _, _)).WillByDefault(Return(true));
+      ON_CALL(*cache, Get(_, _)).WillByDefault(Return(boost::any()));
+      ON_CALL(*cache, Get(_, _)).WillByDefault(Return(nullptr));
+      ON_CALL(*cache, Remove(_)).WillByDefault(Return(true));
+      ON_CALL(*cache, RemoveKeysWithPrefix(_)).WillByDefault(Return(true));
+      return cache;
     } else {
       return olp::dataservice::read::CreateDefaultCache();
     }
@@ -172,16 +172,14 @@ TEST_P(CatalogClientTest, ReadNPartitions) {
 
 INSTANTIATE_TEST_SUITE_P(
     Performance, CatalogClientTest,
-    testing::Values(CatalogClientTestConfiguration{10, 1, 1, true},
-                    CatalogClientTestConfiguration{10, 1, 10, true},
-                    CatalogClientTestConfiguration{10, 10, 1, true},
-                    CatalogClientTestConfiguration{10, 10, 10, true},
+    ::testing::Values(CatalogClientTestConfiguration{10, 1, 1, true},
+                      CatalogClientTestConfiguration{10, 1, 10, true},
+                      CatalogClientTestConfiguration{10, 10, 1, true},
+                      CatalogClientTestConfiguration{10, 10, 10, true},
 
-                    CatalogClientTestConfiguration{10, 1, 1, false},
-                    CatalogClientTestConfiguration{10, 1, 10, false},
-                    CatalogClientTestConfiguration{10, 10, 1, false},
-                    CatalogClientTestConfiguration{10, 10, 10, false},
+                      CatalogClientTestConfiguration{10, 1, 1, false},
+                      CatalogClientTestConfiguration{10, 1, 10, false},
+                      CatalogClientTestConfiguration{10, 10, 1, false},
+                      CatalogClientTestConfiguration{10, 10, 10, false},
 
-                    CatalogClientTestConfiguration{5000, 1, 1, false}
-
-                    ));
+                      CatalogClientTestConfiguration{5000, 1, 1, false}));
