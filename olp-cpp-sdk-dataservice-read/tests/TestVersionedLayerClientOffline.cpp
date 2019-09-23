@@ -52,8 +52,11 @@ std::function<olp::http::SendOutcome(
     olp::http::Network::Callback callback,
     olp::http::Network::HeaderCallback header_callback,
     olp::http::Network::DataCallback data_callback)>
-ReturnHttpResponse(olp::http::NetworkResponse response,
-                   const std::string& response_body) {
+ReturnHttpResponse(
+    olp::http::NetworkResponse response, const std::string& response_body,
+    std::shared_ptr<std::promise<void>> pre_signal = nullptr,
+    std::shared_ptr<std::promise<void>> wait_for_signal = nullptr,
+    std::shared_ptr<std::promise<void>> post_signal = nullptr) {
   return [=](olp::http::NetworkRequest request,
              olp::http::Network::Payload payload,
              olp::http::Network::Callback callback,
@@ -61,8 +64,23 @@ ReturnHttpResponse(olp::http::NetworkResponse response,
              olp::http::Network::DataCallback data_callback)
              -> olp::http::SendOutcome {
     std::thread([=]() {
+      // notify waiting thread that we reached the network code
+      if (pre_signal) {
+        pre_signal->set_value();
+      }
+
+      // wait until test cancel request during execution
+      if (wait_for_signal) {
+        wait_for_signal->get_future().get();
+      }
+
       *payload << response_body;
       callback(response);
+
+      // notify that request finished
+      if (post_signal) {
+        post_signal->set_value();
+      }
     })
         .detach();
 
@@ -89,7 +107,8 @@ class NetworkMock : public olp::http::Network {
 MATCHER_P(IsGetRequest, url, "") {
   // uri, verb, null body
   return olp::http::NetworkRequest::HttpVerb::GET == arg.GetVerb() &&
-         std::string(url).substr(0, 20) == arg.GetUrl().substr(0, 20) && (!arg.GetBody() || arg.GetBody()->empty());
+         std::string(url).substr(0, 20) == arg.GetUrl().substr(0, 20) &&
+         (!arg.GetBody() || arg.GetBody()->empty());
 }
 
 std::string GetTestCatalog() {
@@ -103,20 +122,6 @@ class VersionedLayerClientOfflineTest : public ::testing::Test {
 
     settings_ = std::make_shared<olp::client::OlpClientSettings>();
     settings_->network_request_handler = network_mock_;
-
-    EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
-        .WillOnce(
-            ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                               HTTP_RESPONSE_LOOKUP_QUERY))
-        .WillOnce(
-            ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                               HTTP_RESPONSE_PARTITION_269))
-        .WillOnce(
-            ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                               HTTP_RESPONSE_LOOKUP_BLOB))
-        .WillOnce(
-            ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                               HTTP_RESPONSE_BLOB_DATA_269));
   }
 
   void TearDown() override {
@@ -136,6 +141,16 @@ class VersionedLayerClientOfflineTest : public ::testing::Test {
 TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsync) {
   settings_->task_scheduler =
       olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_PARTITION_269))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_BLOB))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_BLOB_DATA_269));
 
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
@@ -157,7 +172,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsync) {
       partition,
       [&promise](DataResponse response) { promise.set_value(response); });
 
-  //ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
 
   ASSERT_TRUE(response.IsSuccessful()) << response.GetError().GetMessage();
@@ -166,6 +181,16 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsync) {
 }
 
 TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionSync) {
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_PARTITION_269))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_BLOB))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_BLOB_DATA_269));
+
   auto catalog = olp::client::HRN::FromString(
       CustomParameters::getArgument("dataservice_read_test_catalog"));
   auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
@@ -182,6 +207,212 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionSync) {
   auto token = catalog_client->GetDataByPartitionId(
       partition,
       [&response](DataResponse resp) { response = std::move(resp); });
+  ASSERT_TRUE(response.IsSuccessful());
+  ASSERT_TRUE(response.GetResult() != nullptr);
+  ASSERT_NE(response.GetResult()->size(), 0u);
+}
+
+TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionAsyncCancelLookup) {
+  settings_->task_scheduler =
+      olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
+  auto waitForCancel = std::make_shared<std::promise<void>>();
+  auto pauseForCancel = std::make_shared<std::promise<void>>();
+  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY, waitForCancel,
+                                   pauseForCancel));
+
+  EXPECT_CALL(*network_mock_, Cancel(_))
+      .WillOnce(testing::Invoke(std::move(cancel_mock)));
+
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
+  auto version = std::atoi(
+      CustomParameters::getArgument("dataservice_read_test_layer_version")
+          .c_str());
+
+  auto catalog_client =
+      std::make_unique<olp::dataservice::read::VersionedLayerClient>(
+          *settings_, catalog, layer, version);
+  ASSERT_TRUE(catalog_client);
+
+  std::promise<DataResponse> promise;
+  std::future<DataResponse> future = promise.get_future();
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
+  auto token = catalog_client->GetDataByPartitionId(
+      partition,
+      [&promise](DataResponse response) { promise.set_value(response); });
+
+  waitForCancel->get_future().get();
+  token.cancel();
+  pauseForCancel->set_value();
+
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  DataResponse response = future.get();
+
+  ASSERT_TRUE(!response.IsSuccessful()) << response.GetError().GetMessage();
+  ASSERT_TRUE(response.GetResult() == nullptr);
+}
+
+TEST_F(VersionedLayerClientOfflineTest,
+       GetDataFromPartitionAsyncCancelPartition) {
+  settings_->task_scheduler =
+      olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
+  auto waitForCancel = std::make_shared<std::promise<void>>();
+  auto pauseForCancel = std::make_shared<std::promise<void>>();
+  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_PARTITION_269, waitForCancel,
+                                   pauseForCancel));
+
+  EXPECT_CALL(*network_mock_, Cancel(_))
+      .WillOnce(testing::Invoke(std::move(cancel_mock)));
+
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
+  auto version = std::atoi(
+      CustomParameters::getArgument("dataservice_read_test_layer_version")
+          .c_str());
+
+  auto catalog_client =
+      std::make_unique<olp::dataservice::read::VersionedLayerClient>(
+          *settings_, catalog, layer, version);
+  ASSERT_TRUE(catalog_client);
+
+  std::promise<DataResponse> promise;
+  std::future<DataResponse> future = promise.get_future();
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
+  auto token = catalog_client->GetDataByPartitionId(
+      partition,
+      [&promise](DataResponse response) { promise.set_value(response); });
+
+  waitForCancel->get_future().get();
+  token.cancel();
+  pauseForCancel->set_value();
+
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  DataResponse response = future.get();
+
+  ASSERT_TRUE(!response.IsSuccessful()) << response.GetError().GetMessage();
+  ASSERT_TRUE(response.GetResult() == nullptr);
+}
+
+TEST_F(VersionedLayerClientOfflineTest,
+       GetDataFromPartitionAsyncCancelLookupBlob) {
+  settings_->task_scheduler =
+      olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
+  auto waitForCancel = std::make_shared<std::promise<void>>();
+  auto pauseForCancel = std::make_shared<std::promise<void>>();
+  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_PARTITION_269))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_BLOB, waitForCancel,
+                                   pauseForCancel));
+
+  EXPECT_CALL(*network_mock_, Cancel(_))
+      .WillOnce(testing::Invoke(std::move(cancel_mock)));
+
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
+  auto version = std::atoi(
+      CustomParameters::getArgument("dataservice_read_test_layer_version")
+          .c_str());
+
+  auto catalog_client =
+      std::make_unique<olp::dataservice::read::VersionedLayerClient>(
+          *settings_, catalog, layer, version);
+  ASSERT_TRUE(catalog_client);
+
+  std::promise<DataResponse> promise;
+  std::future<DataResponse> future = promise.get_future();
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
+  auto token = catalog_client->GetDataByPartitionId(
+      partition,
+      [&promise](DataResponse response) { promise.set_value(response); });
+
+  waitForCancel->get_future().get();
+  token.cancel();
+  pauseForCancel->set_value();
+
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  DataResponse response = future.get();
+
+  ASSERT_TRUE(!response.IsSuccessful()) << response.GetError().GetMessage();
+  ASSERT_TRUE(response.GetResult() == nullptr);
+}
+
+TEST_F(VersionedLayerClientOfflineTest,
+       GetDataFromPartitionAsyncCancelBlobData) {
+  settings_->task_scheduler =
+      olp::client::OlpClientSettingsFactory::CreateDefaultTaskScheduler(1);
+
+  auto waitForCancel = std::make_shared<std::promise<void>>();
+  auto pauseForCancel = std::make_shared<std::promise<void>>();
+  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_QUERY))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_PARTITION_269))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_LOOKUP_BLOB))
+      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
+                                   HTTP_RESPONSE_BLOB_DATA_269, waitForCancel,
+                                   pauseForCancel));
+
+  EXPECT_CALL(*network_mock_, Cancel(_))
+      .WillOnce(testing::Invoke(std::move(cancel_mock)));
+
+  auto catalog = olp::client::HRN::FromString(
+      CustomParameters::getArgument("dataservice_read_test_catalog"));
+  auto layer = CustomParameters::getArgument("dataservice_read_test_layer");
+  auto version = std::atoi(
+      CustomParameters::getArgument("dataservice_read_test_layer_version")
+          .c_str());
+
+  auto catalog_client =
+      std::make_unique<olp::dataservice::read::VersionedLayerClient>(
+          *settings_, catalog, layer, version);
+  ASSERT_TRUE(catalog_client);
+
+  std::promise<DataResponse> promise;
+  std::future<DataResponse> future = promise.get_future();
+  auto partition =
+      CustomParameters::getArgument("dataservice_read_test_partition");
+  auto token = catalog_client->GetDataByPartitionId(
+      partition,
+      [&promise](DataResponse response) { promise.set_value(response); });
+
+  waitForCancel->get_future().get();
+  token.cancel();
+  pauseForCancel->set_value();
+
+  // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
+  DataResponse response = future.get();
+
+  // The response is still successful - cancel happened at the very end of the
+  // task, nothing to cancel, honestly
   ASSERT_TRUE(response.IsSuccessful());
   ASSERT_TRUE(response.GetResult() != nullptr);
   ASSERT_NE(response.GetResult()->size(), 0u);
