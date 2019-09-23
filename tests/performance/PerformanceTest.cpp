@@ -1,5 +1,6 @@
 #include <olp/authentication/TokenProvider.h>
 
+#include <olp/core/cache/KeyValueCache.h>
 #include <olp/core/client/HRN.h>
 #include <olp/core/client/OlpClientSettings.h>
 #include <olp/core/client/OlpClientSettingsFactory.h>
@@ -13,13 +14,15 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 using namespace olp;
 
 struct CatalogClientTestConfiguration {
   int number_of_requests;
   int calling_thread_count;
   int task_scheduler_threads;
-  bool use_cache;
+  bool use_no_cache;
 };
 
 std::ostream& operator<<(std::ostream& stream,
@@ -28,7 +31,7 @@ std::ostream& operator<<(std::ostream& stream,
                 << ".calling_thread_count=" << config.calling_thread_count
                 << ", .task_scheduler_threads=" << config.task_scheduler_threads
                 << ", .number_of_requests=" << config.number_of_requests
-                << ", .use_cache=" << config.use_cache << ")";
+                << ", .use_no_cache=" << config.use_no_cache << ")";
 }
 
 class CatalogClientTest
@@ -74,6 +77,33 @@ const std::string kKeySecret("");
 const std::string kCatalogHRN("");
 const std::string kLayerId("");
 const std::string kPartitionId("");
+
+class AlwaysEmptyCache : public olp::cache::KeyValueCache {
+ public:
+  ~AlwaysEmptyCache() = default;
+
+  bool Put(const std::string& key, const boost::any& value,
+           const olp::cache::Encoder& encoder,
+           time_t expiry = (std::numeric_limits<time_t>::max)()) override {
+    return true;
+  }
+  bool Put(const std::string& key,
+           const std::shared_ptr<std::vector<unsigned char>> value,
+           time_t expiry = (std::numeric_limits<time_t>::max)()) override {
+    return true;
+  }
+  boost::any Get(const std::string& key,
+                 const olp::cache::Decoder& encoder) override {
+    return boost::any();
+  }
+  std::shared_ptr<std::vector<unsigned char>> Get(
+      const std::string& key) override {
+    return nullptr;
+  }
+  bool Remove(const std::string& key) override { return true; }
+  bool RemoveKeysWithPrefix(const std::string& prefix) override { return true; }
+};
+
 }  // namespace
 
 TEST_P(CatalogClientTest, ReadNPartitions) {
@@ -100,8 +130,16 @@ TEST_P(CatalogClientTest, ReadNPartitions) {
   client_settings->task_scheduler = task_scheduler_;
   client_settings->network_request_handler = s_network;
 
+  std::shared_ptr<olp::cache::KeyValueCache> cache;
+
+  if (parameter.use_no_cache) {
+    cache = std::make_shared<AlwaysEmptyCache>();
+  } else {
+    cache = olp::dataservice::read::CreateDefaultCache();
+  }
+
   auto service_client = std::make_unique<olp::dataservice::read::CatalogClient>(
-      olp::client::HRN(kCatalogHRN), std::move(client_settings));
+      olp::client::HRN(kCatalogHRN), std::move(client_settings), cache);
 
   std::vector<std::thread> client_threads;
 
@@ -128,16 +166,9 @@ TEST_P(CatalogClientTest, ReadNPartitions) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(Performance, CatalogClientTest,
-                         testing::Values(
-                             /// task scheduler has 1 thread
-                             CatalogClientTestConfiguration{1, 1, 1, true},
-                             CatalogClientTestConfiguration{100, 1, 1, true},
-                             CatalogClientTestConfiguration{1, 100, 1, true},
-                             CatalogClientTestConfiguration{100, 100, 1, true},
-                             /// task scheduler has 10 threads
-                             CatalogClientTestConfiguration{1, 1, 10, true},
-                             CatalogClientTestConfiguration{100, 1, 10, true},
-                             CatalogClientTestConfiguration{1, 100, 10, true},
-                             CatalogClientTestConfiguration{100, 100, 10,
-                                                            true}));
+INSTANTIATE_TEST_SUITE_P(
+    Performance, CatalogClientTest,
+    testing::Values(CatalogClientTestConfiguration{1000, 1, 1, true},
+                    CatalogClientTestConfiguration{1000, 1, 10, true},
+                    CatalogClientTestConfiguration{1000, 10, 1, true},
+                    CatalogClientTestConfiguration{1000, 10, 10, true}));
