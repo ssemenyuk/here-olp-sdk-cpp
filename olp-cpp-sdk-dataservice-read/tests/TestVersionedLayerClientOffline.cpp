@@ -47,6 +47,88 @@ namespace {
 
 constexpr auto kWaitTimeout = std::chrono::seconds(10);
 
+using NetworkCallback = std::function<olp::http::SendOutcome(
+    olp::http::NetworkRequest, olp::http::Network::Payload,
+    olp::http::Network::Callback, olp::http::Network::HeaderCallback,
+    olp::http::Network::DataCallback)>;
+
+using CancelCallback = std::function<void(olp::http::RequestId)>;
+
+struct MockedResponseInformation {
+  int status;
+  const char* data;
+};
+
+std::tuple<olp::http::RequestId, NetworkCallback, CancelCallback>
+generateNetworkMocks(std::shared_ptr<std::promise<void>> pre_signal,
+                     std::shared_ptr<std::promise<void>> wait_for_signal,
+                     MockedResponseInformation response_information,
+                     std::shared_ptr<std::promise<void>> post_signal =
+                         std::make_shared<std::promise<void>>()) {
+  using namespace olp::http;
+
+  static std::atomic<RequestId> s_request_id{
+      static_cast<RequestId>(RequestIdConstants::RequestIdMin)};
+
+  olp::http::RequestId request_id = s_request_id.fetch_add(1);
+
+  auto completed = std::make_shared<std::atomic_bool>(false);
+
+  // callback is generated when the send method is executed, in order to receive
+  // the cancel callback, we need to pass it to store it somewhere and share
+  // with cancel mock.
+  auto callback_placeholder = std::make_shared<olp::http::Network::Callback>();
+
+  auto mocked_send =
+      [request_id, completed, pre_signal, wait_for_signal, response_information,
+       post_signal, callback_placeholder](
+          NetworkRequest request, Network::Payload payload,
+          Network::Callback callback, Network::HeaderCallback,
+          Network::DataCallback data_callback) -> olp::http::SendOutcome {
+    *callback_placeholder = callback;
+
+    auto mocked_network_block = [request, pre_signal, wait_for_signal,
+                                 completed, callback, response_information,
+                                 post_signal, payload]() {
+      // emulate a small response delay
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+      // notify waiting thread that we reached the network code
+      pre_signal->set_value();
+
+      // wait until test cancel request during execution
+      wait_for_signal->get_future().get();
+
+      // in the case request was not canceled return the expected payload
+      if (!completed->exchange(true)) {
+        const auto data_len = strlen(response_information.data);
+        payload->write(response_information.data, data_len);
+        callback(NetworkResponse().WithStatus(response_information.status));
+      }
+
+      // notify that request finished
+      post_signal->set_value();
+    };
+
+    // simulate that network code is actually running in the background.
+    std::thread(std::move(mocked_network_block)).detach();
+
+    return SendOutcome(request_id);
+  };
+
+  auto mocked_cancel = [completed,
+                        callback_placeholder](olp::http::RequestId id) {
+    if (!completed->exchange(true)) {
+      auto cancel_code = static_cast<int>(ErrorCode::CANCELLED_ERROR);
+      (*callback_placeholder)(
+          NetworkResponse().WithError("Cancelled").WithStatus(cancel_code));
+    }
+  };
+
+  return std::make_tuple(request_id, std::move(mocked_send),
+                         std::move(mocked_cancel));
+}
+
 std::function<olp::http::SendOutcome(
     olp::http::NetworkRequest request, olp::http::Network::Payload payload,
     olp::http::Network::Callback callback,
@@ -218,13 +300,14 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookup) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
-  auto waitForEnd = std::make_shared<std::promise<void>>();
-  std::function<void(olp::http::RequestId)> cancel_mock;
+  olp::http::RequestId request_id;
+  NetworkCallback send_mock;
+  CancelCallback cancel_mock;
+  std::tie(request_id, send_mock, cancel_mock) = generateNetworkMocks(
+      waitForCancel, pauseForCancel, {200, HTTP_RESPONSE_LOOKUP_QUERY});
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
-      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                                   HTTP_RESPONSE_LOOKUP_QUERY, waitForCancel,
-                                   pauseForCancel, waitForEnd));
+      .WillOnce(testing::Invoke(std::move(send_mock)));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -252,7 +335,6 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookup) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
-  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -267,15 +349,17 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
-  auto waitForEnd = std::make_shared<std::promise<void>>();
-  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  olp::http::RequestId request_id;
+  NetworkCallback send_mock;
+  CancelCallback cancel_mock;
+  std::tie(request_id, send_mock, cancel_mock) = generateNetworkMocks(
+      waitForCancel, pauseForCancel, {200, HTTP_RESPONSE_PARTITION_269});
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_LOOKUP_QUERY))
-      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                                   HTTP_RESPONSE_PARTITION_269, waitForCancel,
-                                   pauseForCancel, waitForEnd));
+      .WillOnce(testing::Invoke(std::move(send_mock)));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -303,7 +387,6 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
-  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -318,19 +401,21 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
-  auto waitForEnd = std::make_shared<std::promise<void>>();
-  std::function<void(olp::http::RequestId)> cancel_mock;
+
+  olp::http::RequestId request_id;
+  NetworkCallback send_mock;
+  CancelCallback cancel_mock;
+  std::tie(request_id, send_mock, cancel_mock) = generateNetworkMocks(
+      waitForCancel, pauseForCancel, {200, HTTP_RESPONSE_LOOKUP_BLOB});
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_LOOKUP_QUERY))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_PARTITION_269))
-      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                                   HTTP_RESPONSE_LOOKUP_BLOB, waitForCancel,
-                                   pauseForCancel, waitForEnd));
+      .WillOnce(testing::Invoke(std::move(send_mock)));
 
-  EXPECT_CALL(*network_mock_, Cancel(_))
+  EXPECT_CALL(*network_mock_, Cancel(request_id))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
 
   auto catalog = olp::client::HRN::FromString(
@@ -356,7 +441,6 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
-  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -371,8 +455,11 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
-  auto waitForEnd = std::make_shared<std::promise<void>>();
-  std::function<void(olp::http::RequestId)> cancel_mock;
+  olp::http::RequestId request_id;
+  NetworkCallback send_mock;
+  CancelCallback cancel_mock;
+  std::tie(request_id, send_mock, cancel_mock) = generateNetworkMocks(
+      waitForCancel, pauseForCancel, {200, HTTP_RESPONSE_BLOB_DATA_269});
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
@@ -381,9 +468,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
                                    HTTP_RESPONSE_PARTITION_269))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_LOOKUP_BLOB))
-      .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
-                                   HTTP_RESPONSE_BLOB_DATA_269, waitForCancel,
-                                   pauseForCancel, waitForEnd));
+      .WillOnce(testing::Invoke(std::move(send_mock)));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -411,14 +496,10 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
-  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
 
-  // The response is still successful - cancel happened at the very end of the
-  // task, nothing to cancel, honestly
-  ASSERT_TRUE(response.IsSuccessful());
-  ASSERT_TRUE(response.GetResult() != nullptr);
-  ASSERT_NE(response.GetResult()->size(), 0u);
+  ASSERT_TRUE(!response.IsSuccessful()) << response.GetError().GetMessage();
+  ASSERT_TRUE(response.GetResult() == nullptr);
 }
