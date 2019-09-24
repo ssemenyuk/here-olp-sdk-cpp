@@ -43,9 +43,10 @@ namespace olp {
 namespace dataservice {
 namespace read {
 
-  namespace {
-  constexpr auto kLogTag = "VersionedLayerClient";
+namespace {
+constexpr auto kLogTag = "VersionedLayerClient";
 }
+
 class VersionedLayerClient::Impl final {
  public:
   Impl(client::OlpClientSettings client_settings, client::HRN hrn,
@@ -56,9 +57,7 @@ class VersionedLayerClient::Impl final {
         layer_id_(std::move(layer_id)),
         layer_version_(layer_version) {}
 
-  ~Impl() {
-    OLP_SDK_LOG_DEBUG_F(kLogTag, "~dtor");
-  }
+  ~Impl() { OLP_SDK_LOG_DEBUG_F(kLogTag, "~dtor"); }
 
   olp::client::CancellationToken GetDataByPartitionId(
       const std::string& partition_id, DataResponseCallback callback) {
@@ -75,14 +74,9 @@ class VersionedLayerClient::Impl final {
                  layer_version]() {
       Condition condition(*context);
       auto wait_and_check = [&] {
-        if (!condition.Wait()) {
+        if (!condition.Wait() && !context->IsCancelled()) {
           callback({{olp::client::ErrorCode::RequestTimeout,
                      "Network request timed out.", true}});
-          return false;
-        }
-        if (context->IsCancelled()) {
-          callback({{olp::client::ErrorCode::RequestTimeout,
-                     "Network request cancelled.", true}});
           return false;
         }
         return true;
@@ -92,7 +86,6 @@ class VersionedLayerClient::Impl final {
       OLP_SDK_LOG_DEBUG_F(kLogTag, "step 1");
 
       ApiClientLookup::ApiClientResponse apis_response;
-
       context->ExecuteOrCancelled([&]() {
         return ApiClientLookup::LookupApiClient(
             olp_client, "query", "v1", hrn,
@@ -104,11 +97,6 @@ class VersionedLayerClient::Impl final {
       });
 
       // TODO: collapse these 2x4 checks into a lambda calls
-      if (context->IsCancelled()) {
-        callback({{olp::client::ErrorCode::Cancelled,
-                   "Request cancelled.", true}});
-        return;
-      }
       if (!wait_and_check()) {
         return;
       }
@@ -123,24 +111,18 @@ class VersionedLayerClient::Impl final {
       // Step 2. Use query service to acquire metadata
       OLP_SDK_LOG_DEBUG_F(kLogTag, "step 2");
 
-      std::vector<std::string> paritions;
-      paritions.push_back(partition_id);
       QueryApi::PartitionsResponse partitions_response;
       context->ExecuteOrCancelled([&]() {
         return olp::dataservice::read::QueryApi::GetPartitionsbyId(
-            query_client, layer_id, paritions, layer_version, boost::none,
-            boost::none, [&](QueryApi::PartitionsResponse response) {
+            query_client, layer_id, std::vector<std::string>{partition_id},
+            layer_version, boost::none, boost::none,
+            [&](QueryApi::PartitionsResponse response) {
               OLP_SDK_LOG_DEBUG_F(kLogTag, "step 2 completed");
               partitions_response = std::move(response);
               condition.Notify();
             });
       });
 
-      if (context->IsCancelled()) {
-        callback({{olp::client::ErrorCode::Cancelled,
-                   "Request cancelled.", true}});
-        return;
-      }
       if (!wait_and_check()) {
         return;
       }
@@ -163,11 +145,6 @@ class VersionedLayerClient::Impl final {
             });
       });
 
-      if (context->IsCancelled()) {
-        callback({{olp::client::ErrorCode::Cancelled,
-                   "Request cancelled.", true}});
-        return;
-      }
       if (!wait_and_check()) {
         return;
       }
@@ -176,11 +153,7 @@ class VersionedLayerClient::Impl final {
                    "Blob request unsuccessful.", true}});
         return;
       }
-      if (context->IsCancelled()) {
-        callback({{olp::client::ErrorCode::Cancelled,
-                   "Request cancelled.", true}});
-        return;
-      }
+
       // Step 4. Use metadata in blob service to acquire data for user
       OLP_SDK_LOG_DEBUG_F(kLogTag, "step 4");
 
@@ -202,11 +175,6 @@ class VersionedLayerClient::Impl final {
             });
       });
 
-      if (context->IsCancelled()) {
-        callback({{olp::client::ErrorCode::Cancelled,
-                   "Request cancelled.", true}});
-        return;
-      }
       if (!wait_and_check()) {
         return;
       }
