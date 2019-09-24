@@ -218,12 +218,13 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookup) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
+  auto waitForEnd = std::make_shared<std::promise<void>>();
   std::function<void(olp::http::RequestId)> cancel_mock;
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_LOOKUP_QUERY, waitForCancel,
-                                   pauseForCancel));
+                                   pauseForCancel, waitForEnd));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -251,6 +252,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookup) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
+  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -265,6 +267,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
+  auto waitForEnd = std::make_shared<std::promise<void>>();
   std::function<void(olp::http::RequestId)> cancel_mock;
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
@@ -272,7 +275,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
                                    HTTP_RESPONSE_LOOKUP_QUERY))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_PARTITION_269, waitForCancel,
-                                   pauseForCancel));
+                                   pauseForCancel, waitForEnd));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -300,6 +303,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelPartition) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
+  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -314,6 +318,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
+  auto waitForEnd = std::make_shared<std::promise<void>>();
   std::function<void(olp::http::RequestId)> cancel_mock;
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
@@ -323,7 +328,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
                                    HTTP_RESPONSE_PARTITION_269))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_LOOKUP_BLOB, waitForCancel,
-                                   pauseForCancel));
+                                   pauseForCancel, waitForEnd));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -351,6 +356,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelLookupBlob) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
+  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();
@@ -365,6 +371,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
 
   auto waitForCancel = std::make_shared<std::promise<void>>();
   auto pauseForCancel = std::make_shared<std::promise<void>>();
+  auto waitForEnd = std::make_shared<std::promise<void>>();
   std::function<void(olp::http::RequestId)> cancel_mock;
 
   EXPECT_CALL(*network_mock_, Send(_, _, _, _, _))
@@ -376,7 +383,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
                                    HTTP_RESPONSE_LOOKUP_BLOB))
       .WillOnce(ReturnHttpResponse(olp::http::NetworkResponse().WithStatus(200),
                                    HTTP_RESPONSE_BLOB_DATA_269, waitForCancel,
-                                   pauseForCancel));
+                                   pauseForCancel, waitForEnd));
 
   EXPECT_CALL(*network_mock_, Cancel(_))
       .WillOnce(testing::Invoke(std::move(cancel_mock)));
@@ -404,6 +411,7 @@ TEST_F(VersionedLayerClientOfflineTest, GetDataFromPartitionCancelBlobData) {
   waitForCancel->get_future().get();
   token.cancel();
   pauseForCancel->set_value();
+  waitForEnd->get_future().get();
 
   // ASSERT_NE(future.wait_for(kWaitTimeout), std::future_status::timeout);
   DataResponse response = future.get();

@@ -35,12 +35,17 @@
 
 #include "repositories/ExecuteOrSchedule.inl"
 
+#include "olp/core/logging/Log.h"
+
 #include <algorithm>
 
 namespace olp {
 namespace dataservice {
 namespace read {
 
+  namespace {
+  constexpr auto kLogTag = "VersionedLayerClient";
+}
 class VersionedLayerClient::Impl final {
  public:
   Impl(client::OlpClientSettings client_settings, client::HRN hrn,
@@ -51,7 +56,9 @@ class VersionedLayerClient::Impl final {
         layer_id_(std::move(layer_id)),
         layer_version_(layer_version) {}
 
-  ~Impl() = default;
+  ~Impl() {
+    OLP_SDK_LOG_DEBUG_F(kLogTag, "~dtor");
+  }
 
   olp::client::CancellationToken GetDataByPartitionId(
       const std::string& partition_id, DataResponseCallback callback) {
@@ -68,15 +75,21 @@ class VersionedLayerClient::Impl final {
                  layer_version]() {
       Condition condition(*context);
       auto wait_and_check = [&] {
-        if (!condition.Wait() && !context->IsCancelled()) {
+        if (!condition.Wait()) {
           callback({{olp::client::ErrorCode::RequestTimeout,
                      "Network request timed out.", true}});
+          return false;
+        }
+        if (context->IsCancelled()) {
+          callback({{olp::client::ErrorCode::RequestTimeout,
+                     "Network request cancelled.", true}});
           return false;
         }
         return true;
       };
 
       // Step 1. Get query service
+      OLP_SDK_LOG_DEBUG_F(kLogTag, "step 1");
 
       ApiClientLookup::ApiClientResponse apis_response;
 
@@ -84,6 +97,7 @@ class VersionedLayerClient::Impl final {
         return ApiClientLookup::LookupApiClient(
             olp_client, "query", "v1", hrn,
             [&](ApiClientLookup::ApiClientResponse response) {
+              OLP_SDK_LOG_DEBUG_F(kLogTag, "step 1 completed");
               apis_response = std::move(response);
               condition.Notify();
             });
@@ -107,6 +121,7 @@ class VersionedLayerClient::Impl final {
       auto query_client = apis_response.GetResult();
 
       // Step 2. Use query service to acquire metadata
+      OLP_SDK_LOG_DEBUG_F(kLogTag, "step 2");
 
       std::vector<std::string> paritions;
       paritions.push_back(partition_id);
@@ -115,6 +130,7 @@ class VersionedLayerClient::Impl final {
         return olp::dataservice::read::QueryApi::GetPartitionsbyId(
             query_client, layer_id, paritions, layer_version, boost::none,
             boost::none, [&](QueryApi::PartitionsResponse response) {
+              OLP_SDK_LOG_DEBUG_F(kLogTag, "step 2 completed");
               partitions_response = std::move(response);
               condition.Notify();
             });
@@ -135,11 +151,13 @@ class VersionedLayerClient::Impl final {
       }
 
       // Step 3. Get blob service
+      OLP_SDK_LOG_DEBUG_F(kLogTag, "step 3");
 
       context->ExecuteOrCancelled([&]() {
         return ApiClientLookup::LookupApiClient(
             olp_client, "blob", "v1", hrn,
             [&](ApiClientLookup::ApiClientResponse response) {
+              OLP_SDK_LOG_DEBUG_F(kLogTag, "step 3 completed");
               apis_response = std::move(response);
               condition.Notify();
             });
@@ -158,8 +176,13 @@ class VersionedLayerClient::Impl final {
                    "Blob request unsuccessful.", true}});
         return;
       }
-
+      if (context->IsCancelled()) {
+        callback({{olp::client::ErrorCode::Cancelled,
+                   "Request cancelled.", true}});
+        return;
+      }
       // Step 4. Use metadata in blob service to acquire data for user
+      OLP_SDK_LOG_DEBUG_F(kLogTag, "step 4");
 
       auto partitions = partitions_response.GetResult().GetPartitions();
       if (partitions.empty()) {
@@ -173,6 +196,7 @@ class VersionedLayerClient::Impl final {
         return olp::dataservice::read::BlobApi::GetBlob(
             blob_client, layer_id, data_handle, boost::none, boost::none,
             [&](BlobApi::DataResponse response) {
+              OLP_SDK_LOG_DEBUG_F(kLogTag, "step 4 completed");
               data_response = std::move(response);
               condition.Notify();
             });

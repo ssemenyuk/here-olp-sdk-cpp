@@ -114,14 +114,20 @@ client::CancellationToken ApiClientLookup::LookupApiClient(
               client::ApiError(client::ErrorCode::ServiceUnavailable,
                                "Service/Version not available for given HRN"));
         } else {
-          const auto& base_url = response.GetResult().at(0).GetBaseUrl();
-          OLP_SDK_LOG_INFO_F(kLogTag,
-                             "LookupApiClient(%s/%s): %s - OK, base_url=%s",
-                             service.c_str(), service_version.c_str(),
-                             hrn.partition.c_str(), base_url.c_str());
+          if (client) {
+            const auto& base_url = response.GetResult().at(0).GetBaseUrl();
+            OLP_SDK_LOG_INFO_F(kLogTag,
+                               "LookupApiClient(%s/%s): %s - OK, base_url=%s",
+                               service.c_str(), service_version.c_str(),
+                               hrn.partition.c_str(), base_url.c_str());
 
-          client->SetBaseUrl(base_url);
-          callback(*client);
+            client->SetBaseUrl(base_url);
+            callback(*client);
+          } else {
+            callback(
+                client::ApiError(client::ErrorCode::ServiceUnavailable,
+                                 "Out of scope"));
+          }
         }
       });
 }

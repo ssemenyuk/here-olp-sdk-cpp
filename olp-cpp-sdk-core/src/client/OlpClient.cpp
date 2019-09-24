@@ -131,7 +131,6 @@ http::NetworkRequest::HttpVerb GetHttpVerb(const std::string& verb) {
 
 }  // anonymous namespace
 
-
 OlpClient::OlpClient() {}
 
 void OlpClient::SetBaseUrl(const std::string& base_url) {
@@ -141,11 +140,19 @@ void OlpClient::SetBaseUrl(const std::string& base_url) {
 const std::string& OlpClient::GetBaseUrl() const { return base_url_; }
 
 std::multimap<std::string, std::string>& OlpClient::GetMutableDefaultHeaders() {
-  return default_headers_;
+  static std::multimap<std::string, std::string> dummy;
+  return dummy;
 }
 
-void OlpClient::SetSettings(const OlpClientSettings& settings) {
-  settings_ = settings;
+void OlpClient::SetSettings(
+    RetrySettings retry_settings,
+    boost::optional<http::NetworkProxySettings> proxy_settings,
+    boost::optional<AuthenticationSettings> authentication_settings,
+    std::weak_ptr<http::Network> network) {
+  retry_settings_ = std::move(retry_settings);
+  proxy_settings_ = std::move(proxy_settings);
+  authentication_settings_ = std::move(authentication_settings);
+  network_ = std::move(network);
 }
 
 std::shared_ptr<http::NetworkRequest> OlpClient::CreateRequest(
@@ -160,15 +167,15 @@ std::shared_ptr<http::NetworkRequest> OlpClient::CreateRequest(
   http::NetworkRequest::HttpVerb http_verb = GetHttpVerb(method);
   network_request->WithVerb(http_verb);
 
-  if (settings_.authentication_settings) {
+  if (authentication_settings_) {
     std::string bearer = http::kBearer + std::string(" ") +
-                         settings_.authentication_settings.get().provider();
+                         authentication_settings_.value().provider();
     network_request->WithHeader(http::kAuthorizationHeader, bearer);
   }
 
-  for (const auto& header : default_headers_) {
-    network_request->WithHeader(header.first, header.second);
-  }
+//  for (const auto& header : default_headers_) {
+//    network_request->WithHeader(header.first, header.second);
+//  }
 
   std::string custom_user_agent;
   for (const auto& header : header_params) {
@@ -224,8 +231,9 @@ NetworkAsyncCallback GetRetryCallback(
                                    weak_cancel_context));
             },
             [callback]() {
-              callback(HttpResponse(static_cast<int>(http::ErrorCode::CANCELLED_ERROR),
-                                    "Operation Cancelled."));
+              callback(HttpResponse(
+                  static_cast<int>(http::ErrorCode::CANCELLED_ERROR),
+                  "Operation Cancelled."));
             });
       } else {
         callback(HttpResponse(static_cast<int>(http::ErrorCode::UNKNOWN_ERROR),
@@ -246,39 +254,29 @@ CancellationToken OlpClient::CallApi(
   auto network_request = CreateRequest(path, method, query_params,
                                        header_params, post_body, content_type);
 
-  auto proxy_settings = olp::http::NetworkProxySettings();
+  auto proxy_settings =
+      proxy_settings_.value_or(olp::http::NetworkProxySettings());
 
-  if (this->settings_.proxy_settings) {
-    proxy_settings = *this->settings_.proxy_settings;
+  if (proxy_settings_) {
+    proxy_settings = proxy_settings_.value();
   }
   olp::http::NetworkSettings network_settings;
-  network_settings.WithConnectionTimeout(
-      this->settings_.retry_settings.timeout);
-  network_settings.WithTransferTimeout(this->settings_.retry_settings.timeout);
-  network_settings.WithRetries(this->settings_.retry_settings.max_attempts);
+  network_settings.WithConnectionTimeout(retry_settings_.timeout);
+  network_settings.WithTransferTimeout(retry_settings_.timeout);
+  network_settings.WithRetries(retry_settings_.max_attempts);
 
   network_settings.WithProxySettings(std::move(proxy_settings));
   network_request->WithSettings(std::move(network_settings));
 
   auto cancel_context = std::make_shared<CancellationContext>();
-  std::weak_ptr<olp::http::Network> network =
-      this->settings_.network_request_handler;
-
-  RetrySettings retry_settings;
-  retry_settings.max_attempts = settings_.retry_settings.max_attempts;
-  retry_settings.timeout = settings_.retry_settings.timeout;
-  retry_settings.initial_backdown_period =
-      settings_.retry_settings.initial_backdown_period;
-  retry_settings.backdown_policy = settings_.retry_settings.backdown_policy;
-  retry_settings.retry_condition = settings_.retry_settings.retry_condition;
 
   NetworkAsyncCallback retry_callback = GetRetryCallback(
-      0, settings_.retry_settings.initial_backdown_period, retry_settings,
-      callback, network_request, network, cancel_context);
+      0, retry_settings_.initial_backdown_period, retry_settings_, callback,
+      network_request, network_, cancel_context);
 
   cancel_context->ExecuteOrCancelled(
       [=]() -> CancellationToken {
-        return ExecuteSingleRequest(network, *network_request, retry_callback);
+        return ExecuteSingleRequest(network_, *network_request, retry_callback);
       },
       [callback]() {
         callback(

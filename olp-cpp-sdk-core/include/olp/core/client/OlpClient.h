@@ -65,7 +65,17 @@ class CORE_API OlpClient {
    * @brief Set the client settings.
    * @param settings Client settings.
    */
-  void SetSettings(const OlpClientSettings& settings);
+  inline void SetSettings(const OlpClientSettings& settings) {
+    SetSettings(settings.retry_settings, settings.proxy_settings,
+                settings.authentication_settings,
+                settings.network_request_handler);
+  }
+
+  void SetSettings(
+      RetrySettings retry_settings,
+      boost::optional<http::NetworkProxySettings> proxy_settings,
+      boost::optional<AuthenticationSettings> authentication_settings,
+      std::weak_ptr<http::Network> network);
 
   /**
    * @brief Execute the REST request through the network stack
@@ -102,8 +112,11 @@ class CORE_API OlpClient {
 
  private:
   std::string base_url_;
-  std::multimap<std::string, std::string> default_headers_;
-  OlpClientSettings settings_;
+//  std::multimap<std::string, std::string> default_headers_;
+  RetrySettings retry_settings_;
+  boost::optional<http::NetworkProxySettings> proxy_settings_;
+  boost::optional<AuthenticationSettings> authentication_settings_;
+  std::weak_ptr<http::Network> network_;
 };
 
 }  // namespace client
