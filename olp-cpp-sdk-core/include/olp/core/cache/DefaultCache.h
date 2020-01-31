@@ -63,7 +63,7 @@ class CORE_API DefaultCache : public KeyValueCache {
    * @brief Parameterized constructor.
    * @param settings Settings for the cache.
    */
-  DefaultCache(const CacheSettings& settings = CacheSettings());
+  explicit DefaultCache(CacheSettings settings = {});
   ~DefaultCache() override;
 
   /**

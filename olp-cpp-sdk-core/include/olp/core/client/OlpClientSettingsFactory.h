@@ -68,7 +68,7 @@ class CORE_API OlpClientSettingsFactory final {
    * @return An instance of KeyValueCache.
    */
   static std::unique_ptr<cache::KeyValueCache> CreateDefaultCache(
-      const cache::CacheSettings& settings);
+      cache::CacheSettings settings);
 };
 
 }  // namespace client
