@@ -68,21 +68,6 @@ class DATASERVICE_READ_API TileRequest final {
   }
 
   /**
-   * @brief Sets the billing tag for the request.
-   *
-   * @see `GetBillingTag()` for information on usage and format.
-   *
-   * @param tag The rvalue reference to the `BillingTag` string or
-   * `boost::none`.
-   *
-   * @return A reference to the updated `TileRequest` instance.
-   */
-  inline TileRequest& WithBillingTag(std::string tag) {
-    billing_tag_ = std::move(tag);
-    return *this;
-  }
-
-  /**
    * @brief Sets the tile key for the request.
    *
    * @param tile_key Tile key value.

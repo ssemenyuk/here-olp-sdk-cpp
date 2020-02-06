@@ -229,7 +229,7 @@ TEST(SerializerTest, PublishDataRequest) {
   std::shared_ptr<std::vector<unsigned char>> data_ =
       std::make_shared<std::vector<unsigned char>>(data_string.begin(),
                                                    data_string.end());
-  publish_data_request.WithBillingTag("OlpCppSdkTest")
+  publish_data_request.WithBillingTag(std::string("OlpCppSdkTest"))
       .WithChecksum("olp-cpp-sdk-checksum")
       .WithData(data_)
       .WithLayerId("olp-cpp-sdk-layer")

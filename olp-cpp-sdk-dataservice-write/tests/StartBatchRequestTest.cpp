@@ -33,7 +33,7 @@ TEST(StartBatchRequestTest, StartBatchRequest) {
       StartBatchRequest()
           .WithLayers({"layer1", "layer2"})
           .WithVersionDependencies({{false, "hrn1", 0}, {true, "hrn2", 1}})
-          .WithBillingTag("billingTag");
+          .WithBillingTag(std::string("billingTag"));
   ASSERT_TRUE(sbr.GetLayers());
   ASSERT_FALSE(sbr.GetLayers()->empty());
   ASSERT_EQ(2ull, sbr.GetLayers()->size());

@@ -90,21 +90,6 @@ class DATASERVICE_READ_API PartitionsRequest final {
   }
 
   /**
-   * @brief Sets the billing tag for the request.
-   *
-   * @see `GetBillingTag()` for information on usage and format.
-   *
-   * @param billingTag The rvalue reference to the `BillingTag` string or
-   * `boost::none`.
-   *
-   * @return A reference to the updated `PrefetchTilesRequest` instance.
-   */
-  inline PartitionsRequest& WithBillingTag(std::string&& billingTag) {
-    billing_tag_ = std::move(billingTag);
-    return *this;
-  }
-
-  /**
    * @brief Gets the fetch option that controls how requests are handled.
    *
    * The default option is `OnlineIfNotFound` that queries the network if

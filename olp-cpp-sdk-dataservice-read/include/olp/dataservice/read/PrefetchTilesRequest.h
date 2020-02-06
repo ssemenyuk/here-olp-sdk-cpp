@@ -168,21 +168,6 @@ class DATASERVICE_READ_API PrefetchTilesRequest final {
   }
 
   /**
-   * @brief Sets the billing tag for the request.
-   *
-   * @see `GetBillingTag()` for information on usage and format.
-   *
-   * @param tag The rvalue reference to the `BillingTag` string or
-   * `boost::none`.
-   *
-   * @return A reference to the updated `PrefetchTilesRequest` instance.
-   */
-  inline PrefetchTilesRequest& WithBillingTag(std::string&& tag) {
-    billing_tag_ = std::move(tag);
-    return *this;
-  }
-
-  /**
    * @brief Creates a readable format for the request.
    *
    * @param layer_id The ID of the layer that is used for the request.

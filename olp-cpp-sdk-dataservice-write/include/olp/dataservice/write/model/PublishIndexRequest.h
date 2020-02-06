@@ -105,18 +105,8 @@ class DATASERVICE_WRITE_API PublishIndexRequest {
    * characters, contain only alpha/numeric ASCII characters [A-Za-z0-9].
    * @note Optional.
    */
-  inline PublishIndexRequest& WithBillingTag(const std::string& billing_tag) {
-    billing_tag_ = billing_tag;
-    return *this;
-  }
-
-  /**
-   * @param billing_tag An optional free-form tag which is used for grouping
-   * billing records together. If supplied, it must be between 4 - 16
-   * characters, contain only alpha/numeric ASCII characters [A-Za-z0-9].
-   * @note Optional.
-   */
-  inline PublishIndexRequest& WithBillingTag(std::string&& billing_tag) {
+  inline PublishIndexRequest& WithBillingTag(
+      boost::optional<std::string> billing_tag) {
     billing_tag_ = std::move(billing_tag);
     return *this;
   }

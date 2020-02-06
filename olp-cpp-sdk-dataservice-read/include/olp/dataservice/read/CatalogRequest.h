@@ -64,21 +64,6 @@ class DATASERVICE_READ_API CatalogRequest final {
   }
 
   /**
-   * @brief Sets the billing tag for the request.
-   *
-   * @see `GetBillingTag()` for information on usage and format.
-   *
-   * @param tag The rvalue reference to the `BillingTag` string or
-   * `boost::none`.
-   *
-   * @return A reference to the updated `CatalogRequest` instance.
-   */
-  inline CatalogRequest& WithBillingTag(std::string&& tag) {
-    billing_tag_ = std::move(tag);
-    return *this;
-  }
-
-  /**
    * @brief Gets the fetch option that controls how requests are handled.
    *
    * The default option is `OnlineIfNotFound` that queries the network if

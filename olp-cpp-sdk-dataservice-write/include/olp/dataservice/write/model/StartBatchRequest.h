@@ -90,7 +90,8 @@ class DATASERVICE_WRITE_API StartBatchRequest {
    * characters, contain only alpha/numeric ASCII characters [A-Za-z0-9].
    * @note Optional.
    */
-  inline StartBatchRequest& WithBillingTag(std::string billing_tag) {
+  inline StartBatchRequest& WithBillingTag(
+      boost::optional<std::string> billing_tag) {
     billing_tag_ = std::move(billing_tag);
     return *this;
   }
