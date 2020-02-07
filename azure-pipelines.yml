@@ -43,3 +43,28 @@ jobs:
       displayName: Verification of cmake script exist.
     - bash: ANDROID_NDK_HOME=$(ANDROID_NDK_HOME) && scripts/android/build.sh
       displayName: Android build and Examples.
+- job: Linux_build_clang
+  pool:
+    vmImage: 'ubuntu-18.04'
+  variables:
+    LD_PRELOAD: "/lib/x86_64-linux-gnu/libSegFault.so"
+    SEGFAULT_SIGNALS: "all"
+  steps:
+    - script: |
+        sudo apt-get install -y --no-install-recommends ccache libcurl4-openssl-dev
+      displayName: 'Install dependencies'
+    - bash: scripts/linux/psv/travis_build_psv.sh
+      displayName: 'Linux Build'
+- job: Linux_build_gcc_test
+  pool:
+    vmImage: 'ubuntu-18.04'
+  variables:
+    LD_PRELOAD: "/lib/x86_64-linux-gnu/libSegFault.so"
+    SEGFAULT_SIGNALS: "all"
+    BUILD_TYPE: "COVERAGE"
+  steps:
+  - script: |
+      sudo apt-get install -y --no-install-recommends ccache libcurl4-openssl-dev
+    displayName: 'Install dependencies'
+  - bash: scripts/linux/psv/travis_build_psv.sh && scripts/linux/psv/travis_test_psv.sh
+    displayName: 'Linux Build and Smoke Tests'

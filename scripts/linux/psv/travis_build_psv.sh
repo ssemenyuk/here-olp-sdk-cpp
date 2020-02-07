@@ -30,4 +30,4 @@ cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     ..
 
 make -j$(nproc)
-ccache -s
+#ccache -s
