@@ -169,7 +169,7 @@ class NetworkAndroid : public Network {
 
   static jobjectArray CreateExtraHeaders(
       JNIEnv* env,
-      const std::vector<std::pair<std::string, std::string>>& extra_headers);
+      const std::multimap<std::string, std::string>& extra_headers);
 
   void SelfRun();
 

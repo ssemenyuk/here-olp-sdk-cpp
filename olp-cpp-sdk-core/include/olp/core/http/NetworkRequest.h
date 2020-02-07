@@ -26,6 +26,7 @@
 
 #include <olp/core/CoreApi.h>
 #include <olp/core/http/NetworkSettings.h>
+#include <olp/core/porting/deprecated.h>
 
 namespace olp {
 namespace http {
@@ -60,7 +61,14 @@ class CORE_API NetworkRequest final {
    * @brief Get all HTTP headers.
    * @return vector of HTTP headers.
    */
-  const RequestHeadersType& GetHeaders() const;
+  OLP_SDK_DEPRECATED("Use GetHttpHeaders instead.")
+  RequestHeadersType GetHeaders() const;
+
+  /**
+   * @brief Get all HTTP headers.
+   * @return multimap of HTTP headers.
+   */
+  const HeadersType& GetHttpHeaders() const;
 
   /**
    * @brief Add extra HTTP header.
@@ -69,6 +77,13 @@ class CORE_API NetworkRequest final {
    * @return reference to *this.
    */
   NetworkRequest& WithHeader(std::string name, std::string value);
+
+  /**
+   * @brief Add extra HTTP header.
+   * @param[in] headers to add to request.
+   * @return reference to *this.
+   */
+  NetworkRequest& WithHeaders(const HeadersType& headers);
 
   /**
    * @brief Get request URL.
@@ -128,7 +143,7 @@ class CORE_API NetworkRequest final {
   /// Request URL.
   std::string url_;
   /// HTTP headers.
-  RequestHeadersType headers_;
+  HeadersType headers_;
   /// Body of HTTP request.
   RequestBodyType body_;
   /// Network settings for this request.

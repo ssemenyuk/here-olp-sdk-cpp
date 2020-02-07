@@ -730,8 +730,7 @@ void NetworkAndroid::ResetRequest(JNIEnv* env, RequestId request_id) {
 }
 
 jobjectArray NetworkAndroid::CreateExtraHeaders(
-    JNIEnv* env,
-    const std::vector<std::pair<std::string, std::string> >& extra_headers) {
+    JNIEnv* env, const std::multimap<std::string, std::string>& extra_headers) {
   if ((extra_headers.empty())) {
     return 0;
   }
@@ -754,35 +753,36 @@ jobjectArray NetworkAndroid::CreateExtraHeaders(
   }
   env->DeleteLocalRef(jempty_string);
 
-  for (size_t i = 0; i < extra_headers.size(); ++i) {
-    jstring name = env->NewStringUTF(extra_headers[i].first.c_str());
+  size_t i = 0;
+  for (const auto& header : extra_headers) {
+    jstring name = env->NewStringUTF(header.first.c_str());
     if (!name || env->ExceptionOccurred()) {
-      OLP_SDK_LOG_ERROR(
-          kLogTag, "Failed to create header name=" << extra_headers[i].first);
+      OLP_SDK_LOG_ERROR(kLogTag,
+                        "Failed to create header name=" << header.first);
       return 0;
     }
     utils::JNIScopedLocalReference name_ref(env, name);
 
-    jstring value = env->NewStringUTF(extra_headers[i].second.c_str());
+    jstring value = env->NewStringUTF(header.second.c_str());
     if (!value || env->ExceptionOccurred()) {
-      OLP_SDK_LOG_ERROR(
-          kLogTag, "Failed to create header value=" << extra_headers[i].second);
+      OLP_SDK_LOG_ERROR(kLogTag,
+                        "Failed to create header value=" << header.second);
       return 0;
     }
     utils::JNIScopedLocalReference value_ref(env, value);
 
     env->SetObjectArrayElement(headers, i * 2, name);
     if (env->ExceptionOccurred()) {
-      OLP_SDK_LOG_ERROR(kLogTag,
-                        "Failed to set header name=" << extra_headers[i].first);
+      OLP_SDK_LOG_ERROR(kLogTag, "Failed to set header name=" << header.first);
       return 0;
     }
     env->SetObjectArrayElement(headers, i * 2 + 1, value);
     if (env->ExceptionOccurred()) {
-      OLP_SDK_LOG_ERROR(
-          kLogTag, "Failed to set header value=" << extra_headers[i].second);
+      OLP_SDK_LOG_ERROR(kLogTag,
+                        "Failed to set header value=" << header.second);
       return 0;
     }
+    ++i;
   }
 
   return headers;
@@ -892,7 +892,7 @@ SendOutcome NetworkAndroid::Send(NetworkRequest request,
 
   // Convert extra headers
   jobjectArray jheaders =
-      CreateExtraHeaders(env.GetEnv(), request.GetHeaders());
+      CreateExtraHeaders(env.GetEnv(), request.GetHttpHeaders());
   if (env.GetEnv()->ExceptionOccurred()) {
     OLP_SDK_LOG_ERROR(kLogTag, "Send failed - can't create JNI Headers, url="
                                    << request.GetUrl());

@@ -16,7 +16,6 @@
  * SPDX-License-Identifier: Apache-2.0
  * License-Filename: LICENSE
  */
-
 #include "olp/core/http/NetworkRequest.h"
 
 namespace olp {
@@ -24,9 +23,11 @@ namespace http {
 
 NetworkRequest::NetworkRequest(std::string url) : url_{std::move(url)} {}
 
-const NetworkRequest::RequestHeadersType& NetworkRequest::GetHeaders() const {
-  return headers_;
+NetworkRequest::RequestHeadersType NetworkRequest::GetHeaders() const {
+  return RequestHeadersType(headers_.begin(), headers_.end());
 }
+
+const HeadersType& NetworkRequest::GetHttpHeaders() const { return headers_; }
 
 const std::string& NetworkRequest::GetUrl() const { return url_; }
 
@@ -40,7 +41,12 @@ const NetworkSettings& NetworkRequest::GetSettings() const { return settings_; }
 
 NetworkRequest& NetworkRequest::WithHeader(std::string name,
                                            std::string value) {
-  headers_.emplace_back(std::move(name), std::move(value));
+  headers_.emplace(std::move(name), std::move(value));
+  return *this;
+}
+
+NetworkRequest& NetworkRequest::WithHeaders(const HeadersType& headers) {
+  headers_.insert(headers.begin(), headers.end());
   return *this;
 }
 

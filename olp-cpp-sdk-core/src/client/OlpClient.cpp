@@ -127,7 +127,7 @@ HttpResponse SendRequest(const http::NetworkRequest& request,
   Condition condition{};
   auto response_body = std::make_shared<std::stringstream>();
   http::SendOutcome outcome{http::ErrorCode::CANCELLED_ERROR};
-  HttpResponse::HeadersType headers;
+  http::HeadersType headers;
 
   context.ExecuteOrCancelled(
       [&]() {
@@ -140,7 +140,7 @@ HttpResponse SendRequest(const http::NetworkRequest& request,
               }
             },
             [&headers](std::string key, std::string value) {
-              headers.emplace_back(std::move(key), std::move(value));
+              headers.emplace(std::move(key), std::move(value));
             });
 
         return CancellationToken([&, interest_flag]() {
@@ -229,9 +229,7 @@ std::shared_ptr<http::NetworkRequest> OlpClient::CreateRequest(
     network_request->WithHeader(http::kAuthorizationHeader, bearer);
   }
 
-  for (const auto& header : default_headers_) {
-    network_request->WithHeader(header.first, header.second);
-  }
+  network_request->WithHeaders(default_headers_);
 
   std::string custom_user_agent;
   for (const auto& header : header_params) {
@@ -388,9 +386,7 @@ HttpResponse OlpClient::CallApi(
     network_request.WithHeader(http::kAuthorizationHeader, bearer);
   }
 
-  for (const auto& header : default_headers_) {
-    network_request.WithHeader(header.first, header.second);
-  }
+  network_request.WithHeaders(default_headers_);
 
   std::string custom_user_agent;
   for (const auto& header : header_params) {

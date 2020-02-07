@@ -481,7 +481,7 @@ ErrorCode NetworkCurl::SendImplementation(
   handle->get_statistics = false;  // request.GetStatistics();
   handle->skip_content = false;    // config->SkipContentWhenError();
 
-  for (const auto& header : request.GetHeaders()) {
+  for (const auto& header : request.GetHttpHeaders()) {
     std::ostringstream sstrm;
     sstrm << header.first;
     sstrm << ": ";

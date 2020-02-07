@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <string>
 
 #include <olp/core/CoreApi.h>
@@ -128,5 +129,9 @@ class SendOutcome final {
  */
 CORE_API std::string ErrorCodeToString(ErrorCode code);
 
+/**
+ * @brief Type alias for HTTP headers.
+ */
+using HeadersType = std::multimap<std::string, std::string>;
 }  // namespace http
 }  // namespace olp

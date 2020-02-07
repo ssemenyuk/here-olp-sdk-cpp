@@ -814,7 +814,7 @@ TEST_P(OlpClientTest, QueryParam) {
 
 TEST_P(OlpClientTest, HeaderParams) {
   std::multimap<std::string, std::string> header_params;
-  std::vector<std::pair<std::string, std::string>> result_headers;
+  olp::http::HeadersType result_headers;
   header_params.insert(std::make_pair("head1", "value1"));
   header_params.insert(std::make_pair("head2", "value2"));
   auto network = std::make_shared<NetworkMock>();
@@ -827,7 +827,7 @@ TEST_P(OlpClientTest, HeaderParams) {
                     olp::http::Network::Callback callback,
                     olp::http::Network::HeaderCallback header_callback,
                     olp::http::Network::DataCallback data_callback) {
-        result_headers = request.GetHeaders();
+        result_headers = request.GetHttpHeaders();
         callback(olp::http::NetworkResponse().WithStatus(200));
         return olp::http::SendOutcome(olp::http::RequestId(5));
       });
@@ -848,7 +848,7 @@ TEST_P(OlpClientTest, HeaderParams) {
 }
 
 TEST_P(OlpClientTest, DefaultHeaderParams) {
-  std::vector<std::pair<std::string, std::string>> result_headers;
+  olp::http::HeadersType result_headers;
   client_.GetMutableDefaultHeaders().insert(std::make_pair("head1", "value1"));
   client_.GetMutableDefaultHeaders().insert(std::make_pair("head2", "value2"));
   auto network = std::make_shared<NetworkMock>();
@@ -861,7 +861,7 @@ TEST_P(OlpClientTest, DefaultHeaderParams) {
                     olp::http::Network::Callback callback,
                     olp::http::Network::HeaderCallback header_callback,
                     olp::http::Network::DataCallback data_callback) {
-        result_headers = request.GetHeaders();
+        result_headers = request.GetHttpHeaders();
         callback(olp::http::NetworkResponse().WithStatus(200));
         return olp::http::SendOutcome(olp::http::RequestId(5));
       });
@@ -882,7 +882,7 @@ TEST_P(OlpClientTest, DefaultHeaderParams) {
 }
 
 TEST_P(OlpClientTest, CombineHeaderParams) {
-  std::vector<std::pair<std::string, std::string>> result_headers;
+  olp::http::HeadersType result_headers;
   client_.GetMutableDefaultHeaders().insert(std::make_pair("head1", "value1"));
   client_.GetMutableDefaultHeaders().insert(std::make_pair("head2", "value2"));
   std::multimap<std::string, std::string> header_params;
@@ -897,7 +897,7 @@ TEST_P(OlpClientTest, CombineHeaderParams) {
                     olp::http::Network::Callback callback,
                     olp::http::Network::HeaderCallback header_callback,
                     olp::http::Network::DataCallback data_callback) {
-        result_headers = request.GetHeaders();
+        result_headers = request.GetHttpHeaders();
         callback(olp::http::NetworkResponse().WithStatus(200));
         return olp::http::SendOutcome(olp::http::RequestId(5));
       });
@@ -920,7 +920,7 @@ TEST_P(OlpClientTest, CombineHeaderParams) {
 }
 
 TEST_P(OlpClientTest, Content) {
-  std::vector<std::pair<std::string, std::string>> result_headers;
+  olp::http::HeadersType result_headers;
   client_.GetMutableDefaultHeaders().insert(std::make_pair("head1", "value1"));
   std::multimap<std::string, std::string> header_params;
   header_params.insert(std::make_pair("head3", "value3"));
@@ -939,7 +939,7 @@ TEST_P(OlpClientTest, Content) {
                     olp::http::Network::Callback callback,
                     olp::http::Network::HeaderCallback header_callback,
                     olp::http::Network::DataCallback data_callback) {
-        result_headers = request.GetHeaders();
+        result_headers = request.GetHttpHeaders();
         resultContent = request.GetBody();
         callback(olp::http::NetworkResponse().WithStatus(200));
         return olp::http::SendOutcome(olp::http::RequestId(5));
@@ -1191,7 +1191,7 @@ TEST_P(OlpClientTest, CancelRetry) {
 
 TEST_P(OlpClientTest, QueryMultiParams) {
   std::string uri;
-  std::vector<std::pair<std::string, std::string>> headers;
+  olp::http::HeadersType headers;
   auto network = std::make_shared<NetworkMock>();
   client_settings_.network_request_handler = network;
   client_.SetSettings(client_settings_);
@@ -1203,7 +1203,7 @@ TEST_P(OlpClientTest, QueryMultiParams) {
                     olp::http::Network::HeaderCallback header_callback,
                     olp::http::Network::DataCallback data_callback) {
         uri = request.GetUrl();
-        headers = request.GetHeaders();
+        headers = request.GetHttpHeaders();
         callback(olp::http::NetworkResponse().WithStatus(200));
         return olp::http::SendOutcome(olp::http::RequestId(5));
       });

@@ -44,7 +44,7 @@ NSMutableDictionary* ParseHeadersDictionaryFromRequest(
     const olp::http::NetworkRequest& request) {
   NSMutableDictionary* headers = [[NSMutableDictionary alloc] init];
 
-  const auto& request_headers = request.GetHeaders();
+  const auto& request_headers = request.GetHttpHeaders();
   for (const auto& header : request_headers) {
     NSString* key = [NSString stringWithUTF8String:header.first.c_str()];
     NSString* value = [NSString stringWithUTF8String:header.second.c_str()];
